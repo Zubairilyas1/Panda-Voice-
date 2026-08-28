@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PandaVoice AI</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <main aria-labelledby="app-title">
+        <h1 id="app-title" class="sr-only">PandaVoice AI</h1>
+        
+        <div class="mic-container">
+            <button id="mic-button" aria-label="Start Voice Command" aria-describedby="mic-state-text">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
+            <div id="mic-state-text" aria-live="polite">Ready (Press to Speak)</div>
+        </div>
+
+        <div class="status-container">
+            <h2>Transcript</h2>
+            <output id="status-transcript" aria-live="polite">---</output>
+            
+            <h2>System Response</h2>
+            <output id="status-response" aria-live="polite">---</output>
+        </div>
+    </main>
+    <script src="../utils/constants.js"></script>
+    <script src="../utils/logger.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

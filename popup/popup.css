@@ -1,0 +1,129 @@
+/* Accessibility First: Dark theme, high contrast */
+:root {
+    --bg-color: #121212;
+    --text-color: #ffffff;
+    --accent-color: #d70f64; /* Foodpanda pink */
+    --accent-hover: #e21c72;
+    --state-idle: #d70f64;
+    --state-listening: #4caf50;
+    --state-processing: #ff9800;
+    --state-speaking: #2196f3;
+    --error-color: #f44336;
+}
+
+body {
+    width: 350px;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Screen reader only */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+.mic-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+#mic-button {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid var(--state-idle);
+    background-color: transparent;
+    color: var(--state-idle);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+#mic-button:focus-visible {
+    outline: 4px solid #ffffff;
+    outline-offset: 4px;
+}
+
+#mic-button:hover:not(:disabled) {
+    background-color: rgba(215, 15, 100, 0.1);
+}
+
+#mic-button:disabled {
+    border-color: #555;
+    color: #555;
+    cursor: not-allowed;
+}
+
+#mic-button svg {
+    width: 48px;
+    height: 48px;
+}
+
+#mic-state-text {
+    margin-top: 16px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* State Classes */
+#mic-button.state-listening {
+    border-color: var(--state-listening);
+    color: var(--state-listening);
+    animation: pulse 1.5s infinite;
+}
+#mic-button.state-processing {
+    border-color: var(--state-processing);
+    color: var(--state-processing);
+}
+#mic-button.state-speaking {
+    border-color: var(--state-speaking);
+    color: var(--state-speaking);
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4); }
+    70% { box-shadow: 0 0 0 20px rgba(76, 175, 80, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+}
+
+.status-container {
+    background-color: #1e1e1e;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+.status-container h2 {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #aaa;
+    margin: 0 0 8px 0;
+}
+
+.status-container output {
+    display: block;
+    margin-bottom: 16px;
+    font-size: 1rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+.status-container output:last-child {
+    margin-bottom: 0;
+}
