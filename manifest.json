@@ -10,7 +10,7 @@
         "default": "Ctrl+Shift+L",
         "mac": "Command+Shift+L"
       },
-      "description": "Start/Stop Voice Assistant"
+      "description": "Toggle Voice Assistant (or say 'Hey AI' to activate)"
     }
   },
   "host_permissions": ["https://www.foodpanda.pk/*"],
