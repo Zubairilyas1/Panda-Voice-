@@ -15,37 +15,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Instead of local recognition, we message the background script
-    // which manages the offscreen document.
+    // Mic button toggles the always-on listening mode
     micButton.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: MESSAGES.TOGGLE_MIC });
     });
-
-    // We can also add a listener to visually update the popup if it's open
-    // when the mic is toggled via keyboard shortcut
-    // (Optional enhancement, for now it just acts as a trigger)
-
-
 
     // Listen for responses from Background script
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === MESSAGES.MIC_STATE_CHANGED) {
             if (message.isListening) {
-                setMicState('listening', 'Listening...');
+                setMicState('listening', 'Always Listening — Say "Hey AI"');
             } else {
-                setMicState('idle', 'Ready (Press to Speak)');
+                setMicState('idle', 'Mic Off — Click to Enable');
             }
         }
         else if (message.type === MESSAGES.SPEAK_RESPONSE) {
-            responseOutput.textContent = message.text;
+            transcriptOutput.textContent = message.text;
             setMicState('speaking', 'Speaking...');
             
-            // Revert back to idle after a few seconds
             setTimeout(() => {
-                setMicState('idle', 'Ready (Press to Speak)');
-            }, 3000); 
+                setMicState('listening', 'Always Listening — Say "Hey AI"');
+            }, 3000);
         }
     });
+
+    // Assume mic is listening (it auto-starts on foodpanda pages)
+    // The MIC_STATE_CHANGED listener will update if it's actually off
+    setTimeout(() => {
+        setMicState('listening', 'Always Listening — Say "Hey AI"');
+    }, 300);
 
     function setMicState(stateClass, labelText) {
         micButton.className = '';
@@ -65,7 +63,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function speakError(text) {
-        // Fallback TTS directly in popup for early failures (like missing API key or recognition error)
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(text);
             window.speechSynthesis.speak(utterance);
