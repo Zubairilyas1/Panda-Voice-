@@ -13,6 +13,7 @@ let orchestratorState = {
 let conversationHistory = {};
 let narrationDebounceTimer = null;
 let lastActiveTabId = null;
+let isOffscreenReady = false;
 
 function getHistory(tabId) {
     if (!conversationHistory[tabId]) conversationHistory[tabId] = [];
@@ -33,29 +34,44 @@ async function setupOffscreenDocument() {
         documentUrls: [offscreenUrl]
     });
 
-    if (existingContexts.length > 0) return; // Already exists
+    if (existingContexts.length > 0) {
+        isOffscreenReady = true;
+        return;
+    }
 
     await chrome.offscreen.createDocument({
         url: 'offscreen/offscreen.html',
         reasons: ['USER_MEDIA'],
-        justification: 'Recording user commands from mic'
+        justification: 'Always-listening voice assistant with hotword detection'
     });
+    isOffscreenReady = true;
+    log.info('Offscreen document created');
 }
 
-// ========== TTS (with Auto-Listen support) ==========
-function speak(text, shouldAutoListen = false) {
-    log.info('Speaking', { text, shouldAutoListen });
-    chrome.tts.stop(); 
-    
-    chrome.tts.speak(text, { 
+// ========== AUTO-START: Ensure mic is ready on foodpanda ==========
+async function ensureMicActive() {
+    try {
+        await setupOffscreenDocument();
+        chrome.runtime.sendMessage({ type: MESSAGES.START_MIC }).catch(() => {});
+    } catch (e) {
+        log.error('Failed to ensure mic active', { error: e.message });
+    }
+}
+
+// ========== TTS ==========
+function speak(text) {
+    log.info('Speaking', { text });
+    chrome.tts.stop();
+
+    chrome.tts.speak(text, {
         lang: 'en-US',
-        onEvent: function(event) {
-            if (event.type === 'end' && shouldAutoListen) {
-                // When done speaking, wait 400ms to avoid echo, then trigger the mic
-                log.info('TTS ended, waiting 400ms then auto-listen');
+        onEvent: function (event) {
+            if (event.type === 'end') {
+                log.info('TTS ended — playing listening beep in 2s');
+                // After AI finishes speaking, wait 2s then beep to indicate "I'm listening"
                 setTimeout(() => {
-                    chrome.runtime.sendMessage({ type: MESSAGES.START_MIC }).catch(() => {});
-                }, 400);
+                    chrome.runtime.sendMessage({ type: MESSAGES.PLAY_BEEP, beepType: 'hotword' }).catch(() => {});
+                }, 2000);
             }
         }
     });
@@ -77,13 +93,13 @@ async function handleUserCommand(text, tabId) {
 
     try {
         log.info('Handling user command', { text, tabId });
-        
+
         // Feature 1: Where am I / Repeat
         const lowerCmd = text.toLowerCase().replace(/[^a-z\s]/g, '').trim();
         const repeatCommands = ['where am i', 'repeat', 'repeat that', 'read page', 'what is on the screen', 'whats on the screen'];
         if (repeatCommands.includes(lowerCmd)) {
             log.info('User requested repeat/where-am-i, falling back to auto-narrate');
-            orchestratorState.isExecutingCommand = false; // Release lock so narrate can run
+            orchestratorState.isExecutingCommand = false;
             autoNarrate(tabId);
             return;
         }
@@ -92,18 +108,17 @@ async function handleUserCommand(text, tabId) {
         if (!stateResponse || !stateResponse.success) {
             throw new Error("Could not read page state. Make sure you are on foodpanda.pk.");
         }
-        
+
         const pageState = stateResponse.data;
         const history = getHistory(tabId);
 
         let actionPlan;
         try {
-            // Feature 4: Progress / Thinking sound
             chrome.runtime.sendMessage({ type: MESSAGES.THINKING_START }).catch(() => {});
             actionPlan = await gemini.getActionPlan(pageState, text, history);
         } catch (geminiError) {
             if (geminiError.message === 'timeout') {
-                speak("Taking longer than expected, please try again.", true); // auto-listen on retry
+                speak("Taking longer than expected, please try again.");
                 sendToPopup("Taking longer than expected, please try again.");
             } else {
                 speak("An error occurred with the AI.");
@@ -118,8 +133,7 @@ async function handleUserCommand(text, tabId) {
         log.info('Received Action Plan', { actionPlan });
 
         if (actionPlan.clarification_needed) {
-            // Ask question and auto-listen for the answer
-            speak(actionPlan.clarification_needed, true);
+            speak(actionPlan.clarification_needed);
             sendToPopup(actionPlan.clarification_needed);
             updateHistory(tabId, text, actionPlan.clarification_needed);
             return;
@@ -127,7 +141,7 @@ async function handleUserCommand(text, tabId) {
 
         if (!actionPlan.actions || actionPlan.actions.length === 0) {
             const noOpMsg = actionPlan.spoken_summary || "I couldn't find anything to do.";
-            speak(noOpMsg, true); // auto-listen after no-op
+            speak(noOpMsg);
             sendToPopup(noOpMsg);
             return;
         }
@@ -140,7 +154,7 @@ async function handleUserCommand(text, tabId) {
             });
         } catch (execErr) {
             const msg = execErr.message.toLowerCase();
-            if (msg.includes("receiving end does not exist") || 
+            if (msg.includes("receiving end does not exist") ||
                 msg.includes("could not establish connection") ||
                 msg.includes("back/forward cache") ||
                 msg.includes("message channel is closed")) {
@@ -153,14 +167,14 @@ async function handleUserCommand(text, tabId) {
 
         if (!execResponse || !execResponse.success) {
             const failMsg = "Sorry, I ran into an issue clicking that on the page.";
-            speak(failMsg, true);
+            speak(failMsg);
             sendToPopup(failMsg);
             log.error('Execution failed', { error: execResponse ? execResponse.error : 'Unknown' });
             return;
         }
 
         const results = execResponse.data;
-        
+
         let confirmationMsg = "";
         if (results.failed) {
             confirmationMsg = `I had trouble finishing that step. ${results.failed.reason}`;
@@ -168,12 +182,7 @@ async function handleUserCommand(text, tabId) {
             confirmationMsg = actionPlan.spoken_summary || "Done.";
         }
 
-        // Action completed! Don't auto-listen immediately here if the page is navigating,
-        // because the new page load will trigger auto-narration, which THEN triggers auto-listen.
-        // But if no navigation happens (e.g. just adding to cart), we can auto-listen.
-        // For simplicity, we assume action = wait for page / next user intent. 
-        // We will enable auto-listen after action confirmation so the user can keep chaining commands.
-        speak(confirmationMsg, true); 
+        speak(confirmationMsg);
         sendToPopup(confirmationMsg);
         updateHistory(tabId, text, confirmationMsg);
 
@@ -208,14 +217,14 @@ async function autoNarrate(tabId) {
 
         if (pageContext.type === 'captcha') {
             const warnMsg = "Security check required. A visual captcha is blocking the page. Please manually check the box to continue.";
-            speak(warnMsg, false); // Do not auto-listen here, user must interact manually
+            speak(warnMsg);
             sendToPopup(warnMsg);
             return;
         }
 
         if (pageContext.type === 'homepage') {
-            speak("Welcome to Foodpanda. Say search followed by a dish or restaurant name to get started.", true); // Auto-listen
-            sendToPopup("Welcome to Foodpanda. Say search to get started.");
+            speak("Welcome to Foodpanda. Say hey AI, then your command to get started.");
+            sendToPopup("Welcome to Foodpanda. Say hey AI to start.");
             return;
         }
 
@@ -231,8 +240,7 @@ async function autoNarrate(tabId) {
         if (orchestratorState.isExecutingCommand) return;
 
         if (narrationResult && narrationResult.narration) {
-            // Auto-listen after reading the page!
-            speak(narrationResult.narration, true);
+            speak(narrationResult.narration);
             sendToPopup(narrationResult.narration);
         }
 
@@ -245,10 +253,10 @@ async function autoNarrate(tabId) {
 
 // ========== LISTENERS ==========
 
-// 1. Keyboard Shortcut (Alt+Shift+P)
+// 1. Keyboard Shortcut (Ctrl+Shift+L)
 chrome.commands.onCommand.addListener(async (command) => {
     if (command === 'toggle-mic') {
-        cancelSpeech(); // Explicit barge-in
+        cancelSpeech(); // Barge-in
         await setupOffscreenDocument();
         chrome.runtime.sendMessage({ type: MESSAGES.TOGGLE_MIC }).catch(() => {});
     }
@@ -258,21 +266,18 @@ chrome.commands.onCommand.addListener(async (command) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'CLOSE_OFFSCREEN') {
         chrome.offscreen.closeDocument().catch(() => {});
+        isOffscreenReady = false;
     }
     else if (message.type === 'CANCEL_TTS') {
         cancelSpeech();
-    } 
+    }
     else if (message.type === MESSAGES.START_MIC || message.type === MESSAGES.STOP_MIC || message.type === MESSAGES.TOGGLE_MIC) {
-        // Just ensure offscreen is ready before forwarding
         setupOffscreenDocument().then(() => {
-             chrome.runtime.sendMessage({ type: message.type }).catch(() => {});
+            chrome.runtime.sendMessage({ type: message.type }).catch(() => {});
         });
     }
     else if (message.type === MESSAGES.USER_COMMAND) {
-        // Command arrived from offscreen document (or popup)
         cancelSpeech();
-        
-        // Use the last active tab, or query for it
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             let targetTabId = (tabs.length > 0) ? tabs[0].id : lastActiveTabId;
             if (targetTabId) {
@@ -287,15 +292,31 @@ chrome.tabs.onActivated.addListener(activeInfo => {
     lastActiveTabId = activeInfo.tabId;
 });
 
-// 3. Page load listener (Auto-Narration)
+// 3. Page load listener (Auto-Narration + Auto-Start Mic)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (!tab.url || !tab.url.includes('foodpanda.pk')) return;
     if (changeInfo.status !== 'complete') return;
 
-    if (narrationDebounceTimer) clearTimeout(narrationDebounceTimer);
+    // Ensure offscreen is alive and mic is active whenever foodpanda loads
+    ensureMicActive();
 
+    // Auto-narrate the page after a short debounce
+    if (narrationDebounceTimer) clearTimeout(narrationDebounceTimer);
     narrationDebounceTimer = setTimeout(() => {
         narrationDebounceTimer = null;
         autoNarrate(tabId);
     }, CONFIG.NARRATION_DEBOUNCE_MS);
+});
+
+// 4. Startup: ensure mic is ready when browser starts
+chrome.runtime.onStartup.addListener(() => {
+    log.info('Extension startup — ensuring mic is ready');
+    // Small delay to let browser settle
+    setTimeout(() => ensureMicActive(), 1000);
+});
+
+// 5. Install: ensure mic is ready on first install
+chrome.runtime.onInstalled.addListener(() => {
+    log.info('Extension installed/updated');
+    setTimeout(() => ensureMicActive(), 1000);
 });
