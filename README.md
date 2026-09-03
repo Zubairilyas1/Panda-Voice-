@@ -1,91 +1,193 @@
-# 🐼 PandaVoice AI
+# PandaVoice AI
 
-> **A continuous, hands-free, AI-powered screen reader and ordering assistant for Foodpanda.** Designed specifically for visually impaired users to navigate complex SPA interfaces entirely by voice.
+> **A hands-free, AI-powered voice assistant that lets visually impaired users order food from Foodpanda — just by speaking.**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Chrome_Extension-green.svg)
-![AI](https://img.shields.io/badge/powered_by-Gemini_3.5_Flash-orange.svg)
+Built for the Hackathon. Powered by Gemini 3.5 Flash-Lite.
 
 ---
 
-## 🛑 The Problem
-Modern web applications, especially food delivery platforms like Foodpanda, are heavily reliant on highly dynamic, complex React components (SPAs). For visually impaired users relying on standard screen readers (like NVDA or VoiceOver):
-- Navigating nested component trees is exhausting.
-- Finding specific dish variants and add-ons takes dozens of tab keystrokes.
-- Session context is easily lost, and recovering from errors is nearly impossible without visual cues.
+## The Problem
 
-## 💡 The Solution
-**PandaVoice AI** bypasses the standard tab-and-read paradigm. It acts as an intelligent, conversational middleman between the user and the DOM. 
-By utilizing a continuous hands-free audio loop, semantic DOM parsing, and the reasoning capabilities of Gemini 3.5 Flash-Lite, it allows users to navigate, search, customize, and order food using natural language.
+Food delivery platforms like Foodpanda are complex React SPAs with nested modals, dynamic menus, and multi-step checkout flows. For visually impaired users relying on screen readers:
 
----
+- **Navigation is exhausting** — dozens of tab keystrokes to find one dish.
+- **Context is lost** — no way to know what page you're on after a transition.
+- **Customization is blind** — spice levels, add-ons, and variants require visual parsing.
+- **Checkout is risky** — no voice-native way to confirm before spending real money.
 
-## ✨ Key Features
-- **Continuous Hands-Free Engine:** Uses a Manifest V3 offscreen document for persistent microphone access. Includes smart silence detection (allows mid-sentence pauses) and ambient noise filtering.
-- **Proactive Auto-Narration:** Intelligently detects page transitions and reads out critical page context (search results, menus, cart totals) dynamically.
-- **Transaction Safety & Human-in-the-Loop:** Hardcoded safety layers prevent the AI from clicking irreversible checkout buttons. It requires explicit vocal confirmation before spending real money.
-- **Sensory Polish:** Zero-dependency synthesized audio cues (Web Audio API) provide spatial awareness, letting the user know when the mic is hot, when the AI is processing, and when an action is complete.
-- **Resilience:** Built-in anti-bot CAPTCHA detection, 429 rate-limit backoffs, and stale DOM reference fallbacks.
+Standard screen readers read the DOM. **PandaVoice AI navigates it.**
 
 ---
 
-## 🛠️ Tech Stack
-- **Extension Architecture:** Chrome Manifest V3 (Service Workers, Offscreen API, activeTab).
-- **AI Brain:** Google Gemini 3.5 Flash-Lite (via REST API).
-- **Speech I/O:** `webkitSpeechRecognition` (Input) and `chrome.tts` (Output).
-- **DOM Interaction:** Vanilla JavaScript (No heavy frameworks, direct React event simulation).
-- **Audio Synthesis:** Web Audio API (Zero-asset oscillator beeps).
+## The Solution
+
+PandaVoice AI sits between the user and the page. It listens continuously, reads the page semantically, asks Gemini AI what to do, and executes actions on the live DOM — all hands-free.
+
+```
+You speak → AI understands → Page reacts → AI narrates → You speak again
+```
 
 ---
 
-## 🚀 Installation & Setup Guide
+## Key Features
 
-### 1. Prerequisites
-- Google Chrome browser (version 116 or higher recommended).
-- A Gemini API Key (Free tier works perfectly). Get one from [Google AI Studio](https://aistudio.google.com/).
+### Always-On Hotword Activation
+Say **"Hey AI"** anytime — a chime confirms the assistant is listening. No buttons, no clicks. The microphone runs continuously in a background offscreen document.
 
-### 2. Install the Extension
-1. Clone or download this repository to your local machine.
-2. Open Google Chrome and navigate to `chrome://extensions/`.
-3. Toggle **"Developer mode"** ON (top right corner).
-4. Click **"Load unpacked"** (top left corner).
-5. Select the folder where you extracted this repository.
-6. The PandaVoice AI icon (a neon panda) will appear in your toolbar.
+### Conversational Voice Commands
+Speak naturally. The AI understands context from the current page state and conversation history.
 
-### 3. Configure the API Key
-1. Click the PandaVoice AI extension icon in your Chrome toolbar.
-2. Click the **"Options"** gear icon (or right-click the extension icon and select "Options").
-3. Paste your Gemini API Key into the input field and click **"Save"**.
+- *"Hey AI, search for burger lab"*
+- *"Hey AI, click on the first one"*
+- *"Hey AI, make it extra spicy"*
+- *"Hey AI, add to cart"*
+- *"Hey AI, what's in my cart?"*
+- *"Hey AI, proceed to checkout"*
 
----
+### Proactive Page Narration
+When you land on a page, PandaVoice automatically reads what's there — restaurant names, dish prices, cart totals — so you always know where you are.
 
-## 🎤 How to Use & Demo Flow
+### Transaction Safety
+The AI **refuses** to click "Place Order" without explicit verbal confirmation. Say *"confirm order"* to proceed, or *"cancel"* to back out.
 
-PandaVoice AI is designed to be completely hands-free after activation.
+### Audio Feedback System
+Zero-dependency synthesized audio cues (Web Audio API) provide spatial awareness:
 
-1. Navigate to [www.foodpanda.pk](https://www.foodpanda.pk/).
-2. Press **`Ctrl+Shift+L`** (or **`Command+Shift+L`** on Mac) to activate the assistant.
-3. You will hear a rising *"Ding"*. Speak your command naturally.
-4. You will hear a falling *"Boop"* when it starts processing, followed by a soft ticking sound indicating network activity.
+| Sound | Meaning |
+|-------|---------|
+| Ascending chime | "Hey AI" heard — listening for command |
+| Descending beep | Mic active, ready for speech |
+| Soft ticking | AI is processing your request |
+| Chime after response | "I'm done — say your next command" |
 
-### Recommended Demo Flow
-1. **Search:** Press `Ctrl+Shift+L` and say: *"Search for Burger Lab."*
-   *(The AI will navigate, and proactively read out the top results.)*
-2. **Navigate:** Wait for the "Ding", then say: *"Click on the first one."*
-   *(The AI will open the restaurant and read the popular menu items.)*
-3. **Customize:** Say: *"Click on the Classic Burger."*
-   *(The AI will open the dish modal and read variations and add-ons.)*
-4. **Safety Check:** Add it to your cart, navigate to checkout, and say *"Place my order."*
-   *(The AI will refuse to click the button and explicitly ask you to confirm your transaction for safety.)*
+### Smart Resilience
+- CAPTCHA detection — warns user to solve manually
+- Rate-limit backoff — retries on 429 errors with exponential wait
+- Stale DOM fallback — re-queries elements if page re-rendered
+- Navigation recovery — handles page transitions mid-action gracefully
 
 ---
 
-## 🏗️ Architecture Overview
-- **`background.js`:** The brain. Orchestrates the flow between the page, the mic, and the AI. Manages conversational history and auto-listen loops.
-- **`offscreen.js`:** The ear. A hidden document ensuring continuous microphone access and providing synthesized audio cues.
-- **`page-readers.js`:** The eyes. Deep DOM scrapers that extract semantic meaning (prices, ratings, variants) from Foodpanda's complex React structure.
-- **`content.js`:** The hands. Executes actions on the page by simulating native React user events (mousedown, mouseup, click).
-- **`gemini.js`:** The translator. Converts page state and user commands into strict JSON action plans.
+## Architecture
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Popup UI  │────▶│  Background.js   │────▶│  Content.js     │
+│  (mic btn)  │     │  (orchestrator)  │     │  (DOM actions)  │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+                           │    ▲                    │
+                           ▼    │                    │
+                    ┌──────────────┐          ┌──────────────┐
+                    │  Offscreen   │          │ Page Readers │
+                    │ (mic + audio)│          │ (DOM scrape) │
+                    └──────────────┘          └──────────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │  Gemini API  │
+                    │  (AI brain)  │
+                    └──────────────┘
+```
+
+| File | Role | Responsibility |
+|------|------|----------------|
+| `background/background.js` | **Brain** | Orchestrates command flow, manages conversation history, calls Gemini, speaks responses |
+| `offscreen/offscreen.js` | **Ear** | Continuous speech recognition, hotword detection, audio cues via Web Audio API |
+| `content/content.js` | **Hands** | Scans DOM for interactive elements, executes clicks/types with React event simulation |
+| `content/page-readers.js` | **Eyes** | Deep semantic scraping — extracts dish names, prices, ratings, cart contents, checkout state |
+| `utils/gemini.js` | **Translator** | Gemini API client with JSON retry, rate-limit handling, system prompt engineering |
+| `popup/popup.html` | **Face** | High-contrast mic button with visual state indicators (idle/listening/processing/speaking) |
+| `options/options.html` | **Settings** | Secure API key configuration via chrome.storage.local |
 
 ---
-*Built with ❤️ for accessibility.*
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Platform | Chrome Extension — Manifest V3 |
+| AI Model | Gemini 3.5 Flash-Lite (Google AI Studio) |
+| Speech Input | `webkitSpeechRecognition` (continuous, with hotword detection) |
+| Speech Output | `chrome.tts` (native text-to-speech) |
+| DOM Interaction | Vanilla JS — `mousedown` → `mouseup` → `click` event simulation for React SPAs |
+| Audio Feedback | Web Audio API — oscillator-based beeps (zero external assets) |
+| State Storage | `chrome.storage.local` (API key, conversation history) |
+| Styling | CSS custom properties, WCAG AAA contrast, dark theme |
+
+---
+
+## Installation
+
+### Prerequisites
+- Google Chrome 116+
+- A Gemini API key (free tier works) — get one at [Google AI Studio](https://aistudio.google.com/apikey)
+
+### Steps
+1. **Clone** this repository
+2. Open `chrome://extensions` in Chrome
+3. Enable **Developer mode** (top right)
+4. Click **Load unpacked** and select this folder
+5. Right-click the PandaVoice icon → **Options** → paste your API key → **Save**
+6. Navigate to [foodpanda.pk](https://www.foodpanda.pk) — the mic starts automatically
+
+---
+
+## Demo Script (3 Minutes)
+
+### Act 1 — The Hook (30s)
+> "Foodpanda has complex React menus. Screen readers can't keep up. Watch this."
+
+Open foodpanda.pk. The assistant auto-narrates:
+> *"Welcome to Foodpanda. Say hey AI, then your command to get started."*
+
+### Act 2 — The Flow (90s)
+| Step | Say | What Happens |
+|------|-----|-------------|
+| Search | *"Hey AI, search for burger lab"* | AI finds search bar, types query, reads results |
+| Navigate | *"Hey AI, click on the first one"* | Opens restaurant, reads menu |
+| Customize | *"Hey AI, click on Classic Burger"* | Opens dish modal, reads variants |
+| Add to Cart | *"Hey AI, add to cart"* | Item added, confirmation spoken |
+| Cart Check | *"Hey AI, what's in my cart?"* | Reads cart contents and total |
+| Checkout | *"Hey AI, proceed to checkout"* | Opens checkout, reads address/payment state |
+
+### Act 3 — The Safety Net (30s)
+> "Now watch what happens when I try to actually spend money."
+
+Say: *"Hey AI, place my order"*
+> AI refuses: *"You are about to place a real order. Say confirm order to proceed, or cancel."*
+
+Say: *"cancel"*
+> *"Order cancelled."*
+
+---
+
+## How It Differs
+
+| | Standard Screen Reader | PandaVoice AI |
+|---|---|---|
+| Input | Tab key + arrow keys | Voice commands |
+| Navigation | Manual DOM traversal | AI-driven page understanding |
+| Context | Lost on page transition | Persistent conversation history |
+| Customization | Visual only | Voice-driven variant selection |
+| Safety | No guardrails | Hardcoded transaction confirmation |
+| Feedback | Text-to-speech only | Audio cues + narration + confirmation |
+
+---
+
+## Known Limitations
+
+- English only (Urdu/code-switching is a stretch goal)
+- Single-item orders per command (multi-item is a stretch goal)
+- Stops at checkout — does not complete payment (by design)
+- Foodpanda DOM changes may require selector updates
+- Requires internet connection for Gemini API calls
+
+---
+
+## License
+
+MIT
+
+---
+
+*Built with care for accessibility. Because ordering food should be voice-first.*
