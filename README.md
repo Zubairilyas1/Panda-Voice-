@@ -2,7 +2,12 @@
 
 > **A hands-free, AI-powered voice assistant that lets visually impaired users order food from Foodpanda — just by speaking.**
 
-Built for the Hackathon. Powered by Gemini 3.5 Flash-Lite.
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Chrome_Extension-green.svg)
+![AI](https://img.shields.io/badge/powered_by-Gemini_3.5_Flash-orange.svg)
+![Tech](https://img.shields.io/badge/built_with-JavaScript-f7df1e.svg)
+![Status](https://img.shields.io/badge/status-Demo_Ready-brightgreen.svg)
+![Team](https://img.shields.io/badge/team-4_Members-blueviolet.svg)
 
 ---
 
