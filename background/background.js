@@ -92,7 +92,7 @@ async function handleUserCommand(text, tabId) {
     orchestratorState.isExecutingCommand = true;
 
     try {
-        log.info('Handling user command', { text, tabId });
+        log.info('Handling user command (Agent Loop started)', { text, tabId });
 
         // Feature 1: Where am I / Repeat
         const lowerCmd = text.toLowerCase().replace(/[^a-z\s]/g, '').trim();
@@ -104,87 +104,99 @@ async function handleUserCommand(text, tabId) {
             return;
         }
 
-        const stateResponse = await chrome.tabs.sendMessage(tabId, { type: MESSAGES.GET_PAGE_STATE });
-        if (!stateResponse || !stateResponse.success) {
-            throw new Error("Could not read page state. Make sure you are on foodpanda.pk.");
-        }
+        let isGoalComplete = false;
+        let loopCount = 0;
+        const MAX_LOOPS = 4; // Safety mechanism to prevent infinite loops
 
-        const pageState = stateResponse.data;
-        const history = getHistory(tabId);
-
-        let actionPlan;
-        try {
-            chrome.runtime.sendMessage({ type: MESSAGES.THINKING_START }).catch(() => {});
-            actionPlan = await gemini.getActionPlan(pageState, text, history);
-        } catch (geminiError) {
-            if (geminiError.message === 'timeout') {
-                speak("Taking longer than expected, please try again.");
-                sendToPopup("Taking longer than expected, please try again.");
-            } else {
-                speak("An error occurred with the AI.");
-                sendToPopup("Error details: " + geminiError.message);
+        // Multi-Turn Agent Loop
+        while (!isGoalComplete && loopCount < MAX_LOOPS) {
+            loopCount++;
+            
+            const stateResponse = await chrome.tabs.sendMessage(tabId, { type: MESSAGES.GET_PAGE_STATE }).catch(() => null);
+            if (!stateResponse || !stateResponse.success) {
+                if (loopCount === 1) throw new Error("Could not read page state. Make sure you are on foodpanda.pk.");
+                else break; // Page might be navigating, exit loop
             }
-            log.error('Gemini error', { error: geminiError.message });
-            return;
-        } finally {
-            chrome.runtime.sendMessage({ type: MESSAGES.THINKING_STOP }).catch(() => {});
-        }
 
-        log.info('Received Action Plan', { actionPlan });
+            const pageState = stateResponse.data;
+            const history = getHistory(tabId);
 
-        if (actionPlan.clarification_needed) {
-            speak(actionPlan.clarification_needed);
-            sendToPopup(actionPlan.clarification_needed);
-            updateHistory(tabId, text, actionPlan.clarification_needed);
-            return;
-        }
-
-        if (!actionPlan.actions || actionPlan.actions.length === 0) {
-            const noOpMsg = actionPlan.spoken_summary || "I couldn't find anything to do.";
-            speak(noOpMsg);
-            sendToPopup(noOpMsg);
-            return;
-        }
-
-        let execResponse;
-        try {
-            execResponse = await chrome.tabs.sendMessage(tabId, {
-                type: MESSAGES.EXECUTE_ACTIONS,
-                plan: actionPlan
-            });
-        } catch (execErr) {
-            const msg = execErr.message.toLowerCase();
-            if (msg.includes("receiving end does not exist") ||
-                msg.includes("could not establish connection") ||
-                msg.includes("back/forward cache") ||
-                msg.includes("message channel is closed")) {
-                log.info('Page navigated during execution, treating as success.');
-                execResponse = { success: true, data: { failed: null } };
-            } else {
-                throw execErr;
+            let actionPlan;
+            try {
+                chrome.runtime.sendMessage({ type: MESSAGES.THINKING_START }).catch(() => {});
+                actionPlan = await gemini.getActionPlan(pageState, text, history);
+            } catch (geminiError) {
+                if (geminiError.message === 'timeout') {
+                    speak("Taking longer than expected, please try again.");
+                    sendToPopup("Taking longer than expected, please try again.");
+                } else {
+                    speak("An error occurred with the AI.");
+                    sendToPopup("Error details: " + geminiError.message);
+                }
+                log.error('Gemini error', { error: geminiError.message });
+                break;
+            } finally {
+                chrome.runtime.sendMessage({ type: MESSAGES.THINKING_STOP }).catch(() => {});
             }
+
+            log.info('Received Action Plan', { actionPlan, loopCount });
+
+            // Ask for clarification if stuck
+            if (actionPlan.clarification_needed) {
+                speak(actionPlan.clarification_needed);
+                sendToPopup(actionPlan.clarification_needed);
+                updateHistory(tabId, text, actionPlan.clarification_needed);
+                break;
+            }
+            
+            isGoalComplete = actionPlan.is_goal_complete;
+
+            // Execute Actions
+            if (actionPlan.actions && actionPlan.actions.length > 0) {
+                let execResponse;
+                try {
+                    execResponse = await chrome.tabs.sendMessage(tabId, {
+                        type: MESSAGES.EXECUTE_ACTIONS,
+                        plan: actionPlan
+                    });
+                } catch (execErr) {
+                    const msg = execErr.message.toLowerCase();
+                    if (msg.includes("receiving end does not exist") || msg.includes("could not establish connection") || msg.includes("back/forward cache") || msg.includes("message channel is closed")) {
+                        log.info('Page navigated during execution.');
+                        isGoalComplete = true; // Stop loop, let page load listener take over
+                        break;
+                    } else {
+                        throw execErr;
+                    }
+                }
+
+                if (!execResponse || !execResponse.success) {
+                    const failMsg = "Sorry, I ran into an issue clicking that on the page.";
+                    speak(failMsg);
+                    sendToPopup(failMsg);
+                    log.error('Execution failed', { error: execResponse ? execResponse.error : 'Unknown' });
+                    break;
+                }
+                
+                // Wait for the DOM to settle after a click before the next loop iteration
+                if (!isGoalComplete) {
+                    await new Promise(r => setTimeout(r, 1500)); 
+                }
+            }
+
+            // Speak interim summary if provided
+            if (actionPlan.spoken_summary) {
+                speak(actionPlan.spoken_summary);
+            }
+            
+            updateHistory(tabId, text, actionPlan.spoken_summary || actionPlan.thought_process);
         }
 
-        if (!execResponse || !execResponse.success) {
-            const failMsg = "Sorry, I ran into an issue clicking that on the page.";
-            speak(failMsg);
-            sendToPopup(failMsg);
-            log.error('Execution failed', { error: execResponse ? execResponse.error : 'Unknown' });
-            return;
+        if (loopCount >= MAX_LOOPS) {
+            const limitMsg = "I've reached my maximum steps. Please tell me what to do next.";
+            speak(limitMsg);
+            sendToPopup(limitMsg);
         }
-
-        const results = execResponse.data;
-
-        let confirmationMsg = "";
-        if (results.failed) {
-            confirmationMsg = `I had trouble finishing that step. ${results.failed.reason}`;
-        } else {
-            confirmationMsg = actionPlan.spoken_summary || "Done.";
-        }
-
-        speak(confirmationMsg);
-        sendToPopup(confirmationMsg);
-        updateHistory(tabId, text, confirmationMsg);
 
     } catch (error) {
         log.error('Orchestration error', { error: error.message });
