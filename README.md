@@ -201,12 +201,4 @@ Instead of `response.candidates[0].content.parts[0].text`, extract the text from
 - Foodpanda DOM changes (e.g., A/B testing) may require selector updates in `page-readers.js`.
 - Stops at checkout — does not complete physical payment processing (by design, for safety).
 
----
-
-## License
-
-MIT
-
----
-
 *Built with care for accessibility. Because ordering food should be voice-first.*
