@@ -174,13 +174,32 @@ Say: *"cancel"*
 
 ---
 
+## 🔄 LLM-Agnostic Architecture (Bring Your Own AI)
+
+To allow a user to use **Grok (xAI)**, **OpenAI (ChatGPT)**, or **Claude** instead of Gemini, you would just need to make a small change to how the network request is formatted in the codebase.
+
+Because our architecture is modular, the "Brain" (the prompts, the JSON schema, and the Agentic Loop) works perfectly with any smart LLM. You only have to change the "API wrapper" inside `utils/gemini.js`.
+
+Here is exactly what you would change:
+
+1. **Change the Endpoint & Headers**
+Gemini puts the API key in the URL. Grok and OpenAI use standard Bearer tokens in the headers.
+*   **Gemini:** `fetch('https://generativelanguage.googleapis.com/...v1beta?key=API_KEY')`
+*   **Grok:** `fetch('https://api.x.ai/v1/chat/completions', { headers: { 'Authorization': 'Bearer API_KEY' } })`
+
+2. **Change the Payload Format**
+Update the payload to match Grok/OpenAI's standard format (`messages` array instead of `contents`).
+
+3. **Change the Response Parser**
+Instead of `response.candidates[0].content.parts[0].text`, extract the text from `response.choices[0].message.content`.
+
+---
+
 ## Known Limitations
 
-- English only (Urdu/code-switching is a stretch goal)
-- Single-item orders per command (multi-item is a stretch goal)
-- Stops at checkout — does not complete payment (by design)
-- Foodpanda DOM changes may require selector updates
-- Requires internet connection for Gemini API calls
+- Requires internet connection for LLM API calls.
+- Foodpanda DOM changes (e.g., A/B testing) may require selector updates in `page-readers.js`.
+- Stops at checkout — does not complete physical payment processing (by design, for safety).
 
 ---
 
